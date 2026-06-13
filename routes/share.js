@@ -1,6 +1,6 @@
 import express from 'express';
 import bcrypt from 'bcryptjs';
-import { ShareLink, Travel } from '../models/index.js';
+import { ShareLink, Travel, FamilyMember } from '../models/index.js';
 import { authenticate, optionalAuth } from '../middleware/auth.js';
 import { validate, schemas } from '../middleware/validation.js';
 
@@ -50,14 +50,37 @@ router.get('/:token', optionalAuth, async (req, res) => {
       return res.status(404).json({ success: false, message: '旅行不存在' });
     }
 
-    if (travel.privacy_level === 'private' && (!req.user || req.user.id !== travel.user_id)) {
-      return res.status(403).json({ success: false, message: '该旅行未公开' });
+    const isOwner = req.user && req.user.id === travel.user_id;
+    let isFamilyMember = false;
+    
+    if (!isOwner && req.user) {
+      const familyMembers = await FamilyMember.findByUserId(travel.user_id);
+      isFamilyMember = familyMembers.some(fm => fm.member_user_id === req.user.id);
+    }
+
+    if (travel.privacy_level === 'private') {
+      if (!isOwner) {
+        return res.status(403).json({ success: false, message: '该旅行未公开' });
+      }
+    }
+
+    if (travel.privacy_level === 'family') {
+      if (!isOwner && !isFamilyMember) {
+        return res.status(403).json({ success: false, message: '该旅行仅家庭可见' });
+      }
     }
 
     if (travel.privacy_level === 'password_protected') {
+      if (isOwner || isFamilyMember) {
+        await ShareLink.incrementAccessCount(shareLink.id);
+        res.json({ success: true, data: { travel: { id: travel.id, name: travel.name, description: travel.description, startDate: travel.start_date, endDate: travel.end_date, coverImage: travel.cover_image }, accessCount: shareLink.access_count + 1 } });
+        return;
+      }
+      
       if (!req.query.password) {
         return res.status(401).json({ success: false, message: '需要密码访问', requirePassword: true });
       }
+      
       const isMatch = await bcrypt.compare(req.query.password, travel.password || '');
       if (!isMatch) {
         return res.status(401).json({ success: false, message: '密码错误' });

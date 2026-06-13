@@ -1,4 +1,5 @@
 import express from 'express';
+import bcrypt from 'bcryptjs';
 import {
   Travel,
   Companion,
@@ -330,9 +331,14 @@ router.put('/:id/privacy', async (req, res) => {
       });
     }
     
+    let hashedPassword = null;
+    if (privacy_level === 'password_protected' && password) {
+      hashedPassword = await bcrypt.hash(password, 10);
+    }
+    
     await Travel.update(req.params.id, {
       privacy_level,
-      password: privacy_level === 'password_protected' ? password : null
+      password: hashedPassword
     });
     
     res.json({

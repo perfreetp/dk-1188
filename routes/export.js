@@ -6,7 +6,7 @@ import { generateTravelSummary } from '../utils/reportGenerator.js';
 const router = express.Router({ mergeParams: true });
 router.use(authenticate);
 
-router.post('/:id/export', async (req, res) => {
+router.post('/', async (req, res) => {
   try {
     const travel = await Travel.findById(req.params.id);
     if (!travel) {
@@ -25,7 +25,7 @@ router.post('/:id/export', async (req, res) => {
         stats: summary.stats,
         companions: summary.companions,
         locations: summary.locations,
-        featuredHighlights: featured_only ? summary.featuredHighlights : summary.highlights,
+        highlights: featured_only ? summary.featuredHighlights : summary.highlights,
         moods: summary.moods,
         routes: summary.routes,
         expenseBreakdown: summary.expenseBreakdown,
@@ -33,7 +33,8 @@ router.post('/:id/export', async (req, res) => {
       };
       res.json({ success: true, data: exportData, meta: { format: 'json', travelId: travel.id, travelName: travel.name } });
     } else if (format === 'markdown') {
-      const markdown = generateMarkdownExport(summary, travel);
+      const highlightsToExport = featured_only ? summary.featuredHighlights : summary.highlights;
+      const markdown = generateMarkdownExport(summary, travel, highlightsToExport);
       res.json({ success: true, data: { content: markdown, type: 'markdown' }, meta: { format: 'markdown', travelId: travel.id, travelName: travel.name } });
     } else {
       res.status(400).json({ success: false, message: '不支持的导出格式' });
@@ -44,8 +45,8 @@ router.post('/:id/export', async (req, res) => {
   }
 });
 
-function generateMarkdownExport(summary, travel) {
-  const { basic, stats, companions, locations, featuredHighlights, moods, routes, expenseBreakdown } = summary;
+function generateMarkdownExport(summary, travel, highlights) {
+  const { basic, stats, companions, locations, moods, routes, expenseBreakdown } = summary;
   let md = `# ${basic.name}\n\n`;
   md += `**旅行时间**: ${basic.startDate} 至 ${basic.endDate} (${basic.duration}天)\n\n`;
   if (basic.description) md += `## 简介\n\n${basic.description}\n\n`;
@@ -61,9 +62,9 @@ function generateMarkdownExport(summary, travel) {
     locations.forEach(l => md += `- ${l.name} (${l.type})\n`);
     md += '\n';
   }
-  if (featuredHighlights.length > 0) {
+  if (highlights && highlights.length > 0) {
     md += `## 高光时刻\n\n`;
-    featuredHighlights.forEach(h => {
+    highlights.forEach(h => {
       md += `### ${h.title}\n`;
       if (h.description) md += `${h.description}\n\n`;
     });

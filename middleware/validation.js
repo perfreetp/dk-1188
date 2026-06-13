@@ -1,8 +1,9 @@
 import Joi from 'joi';
 
-export const validate = (schema) => {
+export const validate = (schema, source = 'body') => {
   return (req, res, next) => {
-    const { error } = schema.validate(req.body, { abortEarly: false });
+    const data = source === 'query' ? req.query : req.body;
+    const { error } = schema.validate(data, { abortEarly: false });
     
     if (error) {
       const errors = error.details.map(detail => ({
@@ -20,6 +21,8 @@ export const validate = (schema) => {
     next();
   };
 };
+
+export const validateQuery = (schema) => validate(schema, 'query');
 
 export const schemas = {
   register: Joi.object({
